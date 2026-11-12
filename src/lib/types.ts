@@ -36,7 +36,7 @@ export function isGroup(n: RuleNode): n is Rule {
 // ---------------- Form schema ----------------
 
 export type FieldType =
-  | 'TEXT' | 'TEXTAREA' | 'INTEGER' | 'DECIMAL' | 'DATE' | 'EMAIL' | 'PHONE'
+  | 'TEXT' | 'TEXTAREA' | 'INTEGER' | 'DECIMAL' | 'NUMBER' | 'DATE' | 'EMAIL' | 'PHONE'
   | 'PAN' | 'GSTIN' | 'CIN' | 'PIN' | 'SELECT' | 'RADIO' | 'CHECKBOX' | 'MULTISELECT'
   | 'YESNO' | 'ADDRESS' | 'SECTION_HEADING' | 'INFO'
 

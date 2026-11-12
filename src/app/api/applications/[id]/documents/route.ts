@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const ctx = await requireAuth(req)
     const { id } = await params
-    const app = await loadApplicationFor(ctx, id)
+    const app = await loadApplicationFor(ctx, id, { reviewerRead: true })
     return ok({
       documents: app.documents.map((d) => ({
         id: d.id, requirementCode: d.requirementCode, documentTypeCode: d.documentTypeCode,

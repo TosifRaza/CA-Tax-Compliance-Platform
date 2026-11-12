@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const app = doc.application
     if (ctx.role === 'CLIENT') {
       if (app.client.user.id !== ctx.userId) throw new HttpError(403, 'FORBIDDEN', 'You cannot access this document.')
-    } else if (ctx.role === 'EMPLOYEE' || ctx.role === 'CA_REVIEWER') {
+    } else if (ctx.role === 'EMPLOYEE') {
       const assigned = app.tasks.some((t) => t.assignedToId === ctx.userId)
       if (!assigned) throw new HttpError(403, 'FORBIDDEN', 'You cannot access this document.')
     } // MANAGER/ADMIN/SUPER_ADMIN allowed

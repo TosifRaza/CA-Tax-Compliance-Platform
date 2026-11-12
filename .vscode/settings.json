@@ -17,5 +17,6 @@
   },
   "tailwindCSS.experimental.classRegex": [
     ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"]
-  ]
+  ],
+  "python.terminal.useEnvFile": true
 }

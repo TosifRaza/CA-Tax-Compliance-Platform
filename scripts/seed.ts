@@ -132,12 +132,13 @@ async function main() {
   await db.sourceReference.create({ data: { authority: 'GSTN', title: 'GST Portal — Tutorials/Manuals', url: 'https://tutorial.gst.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED' } })
   const srcIt = await db.sourceReference.create({ data: { authority: 'Income Tax Dept', title: 'Income Tax e-Filing Portal', url: 'https://www.incometax.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED' } })
   const srcItLaw = await db.sourceReference.create({ data: { authority: 'Income Tax Dept', title: 'Income Tax India (Law & Rules)', url: 'https://www.incometaxindia.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED', notes: 'Framework note: Income-tax Act, 2025 effective 01-04-2026 (Tax Year 2026-27 onwards); legacy Income-tax Act, 1961 applies to earlier periods e.g. FY 2025-26 / AY 2026-27. Form applicability must be configured per period by a professional.' } })
-  await db.sourceReference.create({ data: { authority: 'TRACES', title: 'TDS Reconciliation Analysis and Correction Enabling System', url: 'https://traces61.tdscpc.gov.in/app/', verificationStatus: 'VERIFICATION_REQUIRED' } })
-  await db.sourceReference.create({ data: { authority: 'MCA', title: 'Ministry of Corporate Affairs', url: 'https://www.mca.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED' } })
+  const srcGstReturn = await db.sourceReference.create({ data: { authority: 'GSTN', title: 'GSTR-3B user guide', url: 'https://tutorial.gst.gov.in/userguide/returns/Create_and_Submit_GSTR3B.htm', verificationStatus: 'VERIFICATION_REQUIRED' } })
+  const srcTds = await db.sourceReference.create({ data: { authority: 'Income Tax Dept', title: 'TDS compliance', url: 'https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/tds-compliance', verificationStatus: 'VERIFICATION_REQUIRED' } })
+  const srcMca = await db.sourceReference.create({ data: { authority: 'MCA', title: 'SPICe+ instruction kit', url: 'https://www.mca.gov.in/Ministry/pdf/SPICe%2B_help.pdf', verificationStatus: 'VERIFICATION_REQUIRED' } })
   const srcUdyam = await db.sourceReference.create({ data: { authority: 'MoMSME', title: 'Udyam Registration Portal', url: 'https://udyamregistration.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED', notes: 'Udyam registration is FREE of government fee on the official portal. Any professional charge must be a transparent private service fee, never presented as a government charge.' } })
-  await db.sourceReference.create({ data: { authority: 'FSSAI', title: 'FoSCoS — Food Safety Compliance System', url: 'https://foscos.fssai.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED' } })
-  await db.sourceReference.create({ data: { authority: 'IP India', title: 'Controller General of Patents, Designs and Trade Marks', url: 'https://ipindia.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED' } })
-  await db.sourceReference.create({ data: { authority: 'WB UDMA', title: 'Urban Development & Municipal Affairs (West Bengal)', url: 'https://udma.wb.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED', notes: 'Trade licence rules are state/municipality-specific. Never apply a West Bengal rule to other jurisdictions.' } })
+  const srcFssai = await db.sourceReference.create({ data: { authority: 'FSSAI', title: 'FoSCoS — Food Safety Compliance System', url: 'https://foscos.fssai.gov.in/', verificationStatus: 'VERIFICATION_REQUIRED' } })
+  const srcTrademark = await db.sourceReference.create({ data: { authority: 'IP India', title: 'Trade Marks Rules, 2017', url: 'https://ipindia.gov.in/tm-rules-2017', verificationStatus: 'VERIFICATION_REQUIRED' } })
+  const srcWbTrade = await db.sourceReference.create({ data: { authority: 'WB UDMA', title: 'West Bengal municipal trade licence document checklist', url: 'https://udma.wb.gov.in/page/cms/trade_license_checklist_b82694', verificationStatus: 'VERIFICATION_REQUIRED', notes: 'Municipal guidance; verify the relevant local authority and requirements. Do not apply to other jurisdictions.' } })
 
   // ---------------- Workflow: GST Registration ----------------
   const wf = await db.workflowDefinition.create({ data: { code: 'WF_GST_REG', name: 'GST Registration Processing Workflow', description: 'Reference workflow for GST registration applications (demonstration).' } })
@@ -507,7 +508,12 @@ async function main() {
         verificationStatus: 'VERIFICATION_REQUIRED', status: 'DRAFT', demoMarked: true,
       },
     })
-    const srcId = code === 'UDYAM_REG' ? srcUdyam.id : srcGst.id
+    const sourceByService: Record<string, string> = {
+      GST_RET: srcGstReturn.id, TDS_RETURN: srcTds.id, COMPANY_INC: srcMca.id,
+      TRADE_LICENCE: srcWbTrade.id, TM_REG: srcTrademark.id,
+      UDYAM_REG: srcUdyam.id, FSSAI_LIC: srcFssai.id,
+    }
+    const srcId = sourceByService[code]
     const draftVersion = await db.serviceVersion.create({
       data: {
         serviceId: svc.id, version: '0.1.0', status: 'DRAFT',

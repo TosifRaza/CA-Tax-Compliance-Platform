@@ -226,6 +226,7 @@ const PATTERNS: Record<string, RegExp> = {
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   INTEGER: /^-?[0-9]+$/,
   DECIMAL: /^-?[0-9]+(\.[0-9]+)?$/,
+  NUMBER: /^-?[0-9]+(\.[0-9]+)?$/,
   DATE: /^\d{4}-\d{2}-\d{2}$/,
 }
 
@@ -250,18 +251,13 @@ export function validateAnswers(schema: FormSchema, answers: Answers): AnswerErr
       if (f.type === 'CHECKBOX') continue
       const str = Array.isArray(v) ? '' : String(v).trim()
       if (PATTERNS[f.type]) {
-        if (f.type === 'PAN' || f.type === 'GSTIN' || f.type === 'CIN') {
-          if (!PATTERNS[f.type].test(str.toUpperCase())) errors[f.code] = `${f.label} format is invalid.`
+        const value = ['PAN', 'GSTIN', 'CIN'].includes(f.type) ? str.toUpperCase() : str
+        if (!PATTERNS[f.type].test(value)) {
+          errors[f.code] = `${f.label} format is invalid.`
           continue
         }
-        if (!PATTERNS[f.type].test(str)) errors[f.code] = `${f.label} format is invalid.`
-        continue
       }
-      if (['INTEGER', 'DECIMAL'].includes(f.type) && !PATTERNS[f.type === 'INTEGER' ? 'INTEGER' : 'DECIMAL'].test(str)) {
-        errors[f.code] = `${f.label} must be a valid number.`
-        continue
-      }
-      const val = f.type === 'INTEGER' || f.type === 'DECIMAL' ? Number(str) : undefined
+      const val = ['INTEGER', 'DECIMAL', 'NUMBER'].includes(f.type) ? Number(str) : undefined
       if (f.validation?.min !== undefined && val !== undefined && val < f.validation.min) errors[f.code] = `${f.label} must be at least ${f.validation.min}.`
       if (f.validation?.max !== undefined && val !== undefined && val > f.validation.max) errors[f.code] = `${f.label} must be at most ${f.validation.max}.`
       if (f.validation?.pattern) {

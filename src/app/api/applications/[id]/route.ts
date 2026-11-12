@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const ctx = await requireAuth(req)
     const { id } = await params
-    const app = await loadApplicationFor(ctx, id)
+    const app = await loadApplicationFor(ctx, id, { reviewerRead: true })
     const isOwner = ctx.role === 'CLIENT'
     const snapshot = JSON.parse(app.configSnapshot)
     const version = await db.serviceVersion.findUnique({ where: { id: app.serviceVersionId }, select: { id: true, version: true } })

@@ -329,7 +329,7 @@ export function caReviewerTaskScope(userId: string) {
   }
 }
 
-export async function loadApplicationFor(ctx: AuthContext, applicationId: string) {
+export async function loadApplicationFor(ctx: AuthContext, applicationId: string, options?: { reviewerRead?: boolean }) {
   const app = await db.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -358,6 +358,7 @@ export async function loadApplicationFor(ctx: AuthContext, applicationId: string
     return app
   }
   if (ctx.role === 'CA_REVIEWER') {
+    if (options?.reviewerRead) return app
     const assigned = app.tasks.some((t) => t.assignee?.id === ctx.userId)
     const unassignedReview = app.tasks.some((t) =>
       t.responsibleRole === 'CA_REVIEWER' &&

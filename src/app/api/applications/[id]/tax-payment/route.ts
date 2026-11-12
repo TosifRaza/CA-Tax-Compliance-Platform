@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const ctx = await requireAuth(req)
     const { id } = await params
-    await loadApplicationFor(ctx, id)
+    await loadApplicationFor(ctx, id, { reviewerRead: true })
     const rows = await db.taxPayment.findMany({ where: { applicationId: id }, orderBy: { createdAt: 'desc' } })
     return ok({ taxPayments: rows })
   } catch (e) {

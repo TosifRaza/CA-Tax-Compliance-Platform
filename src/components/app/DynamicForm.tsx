@@ -177,7 +177,7 @@ function FieldError({ error }: { error: string }) {
 
 function inputTypeFor(t: FieldType): string {
   switch (t) {
-    case 'INTEGER': case 'DECIMAL': return 'number'
+    case 'INTEGER': case 'DECIMAL': case 'NUMBER': return 'number'
     case 'DATE': return 'date'
     case 'EMAIL': return 'email'
     case 'PHONE': case 'PAN': case 'GSTIN': case 'CIN': case 'PIN': return 'text'
