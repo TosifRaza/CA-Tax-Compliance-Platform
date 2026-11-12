@@ -311,6 +311,24 @@ export { visibleSections }
 // Record-level access control for a single application.
 // =====================================================================
 
+// A reviewer may open work assigned to them, or an unassigned approval task
+// in the reviewer pool. This keeps the application detail permission aligned
+// with the review queue and the review-decision endpoint.
+export function caReviewerTaskScope(userId: string) {
+  return {
+    OR: [
+      { assignedToId: userId },
+      {
+        assignedToId: null,
+        responsibleRole: 'CA_REVIEWER',
+        approvalRequired: true,
+        approvalStatus: 'PENDING_REVIEW',
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+      },
+    ],
+  }
+}
+
 export async function loadApplicationFor(ctx: AuthContext, applicationId: string) {
   const app = await db.application.findUnique({
     where: { id: applicationId },
@@ -334,9 +352,23 @@ export async function loadApplicationFor(ctx: AuthContext, applicationId: string
     if (!client || app.clientId !== client.id) throw new HttpError(403, 'FORBIDDEN', 'You cannot access this application.')
     return app
   }
-  if (ctx.role === 'EMPLOYEE' || ctx.role === 'CA_REVIEWER') {
+  if (ctx.role === 'EMPLOYEE') {
     const assigned = app.tasks.some((t) => t.assignee?.id === ctx.userId)
     if (!assigned) throw new HttpError(403, 'FORBIDDEN', 'This application is not assigned to you.')
+    return app
+  }
+  if (ctx.role === 'CA_REVIEWER') {
+    const assigned = app.tasks.some((t) => t.assignee?.id === ctx.userId)
+    const unassignedReview = app.tasks.some((t) =>
+      t.responsibleRole === 'CA_REVIEWER' &&
+      t.approvalRequired &&
+      t.approvalStatus === 'PENDING_REVIEW' &&
+      ['PENDING', 'IN_PROGRESS'].includes(t.status) &&
+      !t.assignee,
+    )
+    if (!assigned && !unassignedReview) {
+      throw new HttpError(403, 'FORBIDDEN', 'This application has no review task assigned to you or awaiting a reviewer.')
+    }
     return app
   }
   return app // MANAGER / ADMIN / SUPER_ADMIN

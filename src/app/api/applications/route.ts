@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { isStaff } from '@/lib/types'
-import { createDraft } from '@/lib/applications'
+import { caReviewerTaskScope, createDraft } from '@/lib/applications'
 import { jsonError, ok, parseJson, parsePagination, str } from '@/lib/api-utils'
 
 // GET /api/applications — role-scoped list.
@@ -17,9 +17,13 @@ export async function GET(req: NextRequest) {
       const client = await db.client.findUnique({ where: { userId: ctx.userId } })
       if (!client) return ok({ applications: [], total: 0, page })
       where.clientId = client.id
-    } else if (ctx.role === 'EMPLOYEE') {
-      // Employees see applications linked to their assigned tasks.
-      const tasks = await db.applicationTask.findMany({ where: { assignedToId: ctx.userId }, select: { applicationId: true } })
+    } else if (ctx.role === 'EMPLOYEE' || ctx.role === 'CA_REVIEWER') {
+      // Staff see their own work; reviewers also see unassigned approval work
+      // that is available in the shared professional review queue.
+      const taskWhere = ctx.role === 'CA_REVIEWER'
+        ? caReviewerTaskScope(ctx.userId)
+        : { assignedToId: ctx.userId }
+      const tasks = await db.applicationTask.findMany({ where: taskWhere, select: { applicationId: true } })
       where.id = { in: [...new Set(tasks.map((t) => t.applicationId))] }
     }
     if (status) where.status = status

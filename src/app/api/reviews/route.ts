@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { HttpError } from '@/lib/types'
+import { caReviewerTaskScope } from '@/lib/applications'
 import { advanceWorkflow } from '@/lib/tasks'
 import { audit, notify, notifyRole } from '@/lib/audit'
 import { jsonError, ok, parseJson, str } from '@/lib/api-utils'
@@ -13,7 +14,12 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireRole(req, ['CA_REVIEWER'])
     const tasks = await db.applicationTask.findMany({
-      where: { approvalRequired: true, approvalStatus: 'PENDING_REVIEW', status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      where: {
+        approvalRequired: true,
+        approvalStatus: 'PENDING_REVIEW',
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+        ...caReviewerTaskScope(ctx.userId),
+      },
       include: {
         application: { select: { referenceNo: true, business: { select: { legalName: true } }, service: { select: { clientName: true } } } },
         assignee: { select: { id: true, name: true } },
