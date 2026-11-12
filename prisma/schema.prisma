@@ -1,0 +1,726 @@
+// Dynamic Tax & Business Compliance Management System — India
+// Prisma schema. Written SQLite-portable (sandbox); column design mirrors the
+// PostgreSQL target so a production migration is a datasource swap + types review.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// IDENTITY & ORGANIZATION
+// =====================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         String // SUPER_ADMIN | ADMIN | MANAGER | EMPLOYEE | CA_REVIEWER | CLIENT
+  status       String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions    Session[]
+  employee    Employee?
+  client      Client?
+  tasks       ApplicationTask[]  @relation("Assignee")
+  notifications Notification[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  employees Employee[]
+  tasks     ApplicationTask[]
+}
+
+model Employee {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+  designation   String?
+  specialization String? // JSON array of specialization codes, e.g. ["GST_REG"]
+  availability  String   @default("AVAILABLE") // AVAILABLE | ON_LEAVE | UNAVAILABLE
+  maxOpenTasks  Int      @default(10)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+// =====================================================================
+// CLIENTS
+// =====================================================================
+
+model Client {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone  String?
+
+  businesses Business[]
+  tickets    SupportTicket[]
+  applications Application[]
+  complianceObligations ComplianceObligation[]
+  consents   ConsentRecord[]
+}
+
+model Business {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  legalName    String
+  tradeName    String?
+  constitution String // PROPRIETORSHIP | PARTNERSHIP | LLP | PRIVATE_LIMITED | PUBLIC_LIMITED | HUF | TRUST | SOCIETY | OTHER
+  pan          String?
+  gstin        String?
+  cin          String?
+  tan          String?
+  state        String?
+  registeredAddress  String?
+  operatingAddress   String?
+  businessActivities String?
+  annualTurnover Int?   // whole INR, client-declared; used by service applicability rules (R-13)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  applications Application[]
+  complianceObligations ComplianceObligation[]
+
+  @@index([clientId])
+}
+
+// =====================================================================
+// SERVICE CONFIGURATION (masters + versioned configuration)
+// =====================================================================
+
+model ServiceCategory {
+  id           String  @id @default(cuid())
+  code         String  @unique
+  name         String
+  description  String?
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+  createdAt    DateTime @default(now())
+
+  services Service[]
+}
+
+model Service {
+  id                String  @id @default(cuid())
+  categoryId        String
+  category          ServiceCategory @relation(fields: [categoryId], references: [id])
+  code              String  @unique
+  internalName      String
+  clientName        String
+  description       String?
+  authority         String? // Government authority, e.g. "GSTN (gst.gov.in)"
+  officialUrl       String?
+  verificationStatus String @default("VERIFICATION_REQUIRED") // VERIFICATION_REQUIRED | IN_REVIEW | VERIFIED
+  status            String  @default("DRAFT") // DRAFT | PENDING_APPROVAL | PUBLISHED | RETIRED
+  currentVersionId  String? @unique // FK below via named relation
+  demoMarked        Boolean @default(true) // true until professional verification
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  versions     ServiceVersion[] @relation("ServiceVersions")
+  currentVersion ServiceVersion? @relation("ServiceCurrentVersion", fields: [currentVersionId], references: [id])
+  applications Application[]
+
+  @@index([categoryId])
+}
+
+model ServiceVersion {
+  id         String @id @default(cuid())
+  serviceId  String
+  service    Service @relation("ServiceVersions", fields: [serviceId], references: [id], onDelete: Cascade)
+  version    String
+  status     String @default("DRAFT") // DRAFT | VALIDATION | TEST | PROFESSIONAL_REVIEW | APPROVED | PUBLISHED | RETIRED
+  changeNotes String?
+  // JSON configuration payloads (validated before publish; see lib/validation.ts)
+  formSchema          String @default("{}")  // { sections: [...] }
+  documentRequirements String @default("[]") // [...]
+  taskTemplates       String @default("[]") // [...]
+  pricing             String @default("{}") // {...}
+  applicability       String @default("{}") // {...}
+  complianceRules     String @default("[]") // [...]
+  sourceReferences    String @default("[]") // [{sourceId, note}]
+  workflowId          String?
+  workflow            WorkflowDefinition? @relation(fields: [workflowId], references: [id])
+  effectiveFrom       DateTime?
+  approvedByUserId    String?
+  approvedByName      String?
+  approvedAt          DateTime?
+  publishedAt         DateTime?
+  validationReport    String? // JSON of last validation run
+  isActive            Boolean @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  currentForService Service? @relation("ServiceCurrentVersion")
+  approvals         ReviewDecision[]
+  applications      Application[]
+
+  @@unique([serviceId, version])
+  @@index([serviceId])
+}
+
+model SourceReference {
+  id                 String  @id @default(cuid())
+  authority          String
+  title              String
+  url                String
+  publishedOn        String?
+  verifiedOn         DateTime?
+  verificationStatus String  @default("VERIFICATION_REQUIRED") // VERIFICATION_REQUIRED | IN_REVIEW | VERIFIED
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  dueDateRows       StatutoryDueDate[]
+  regulatoryUpdates RegulatoryUpdate[]
+}
+
+// =====================================================================
+// WORKFLOW DEFINITION (masters; instances live in ApplicationTask)
+// =====================================================================
+
+model WorkflowDefinition {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  stages          WorkflowStage[]
+  serviceVersions ServiceVersion[]
+}
+
+model WorkflowStage {
+  id              String  @id @default(cuid())
+  workflowId      String
+  workflow        WorkflowDefinition @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  sequence        Int
+  responsibleRole String // EMPLOYEE | CA_REVIEWER | CLIENT | SYSTEM
+  stageType       String  @default("INTERNAL") // INTERNAL | PROFESSIONAL_APPROVAL | CLIENT_ACTION | GOVERNMENT | CLOSURE
+  isMandatory     Boolean @default(true)
+  slaHours        Int?
+  description     String?
+
+  @@unique([workflowId, code])
+  @@index([workflowId])
+}
+
+// =====================================================================
+// DOCUMENT MANAGEMENT
+// =====================================================================
+
+model DocumentType {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  category    String?
+  description String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model UploadedDocument {
+  id               String  @id @default(cuid())
+  applicationId    String
+  application      Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  requirementCode  String?
+  documentTypeCode String?
+  fileName         String
+  storedName       String // private stored file name
+  filePath         String
+  sizeBytes        Int
+  mimeType         String
+  status           String  @default("PENDING") // PENDING | APPROVED | REJECTED | SUPERSEDED
+  versionNo        Int     @default(1)
+  replacedById     String?
+  reviewNotes      String?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  uploadedById     String
+  createdAt        DateTime @default(now())
+
+  @@index([applicationId])
+  @@index([status])
+}
+
+// =====================================================================
+// APPLICATIONS
+// =====================================================================
+
+model Application {
+  id               String  @id @default(cuid())
+  referenceNo      String  @unique
+  clientId         String
+  client           Client  @relation(fields: [clientId], references: [id])
+  businessId       String? // optional: individual taxpayers (e.g. ITR-1) apply without a business entity
+  business         Business? @relation(fields: [businessId], references: [id])
+  // Chosen statutory period (PDF §2 case flow). periodType: ASSESSMENT_YEAR | TAX_PERIOD | FINANCIAL_YEAR | NOT_APPLICABLE
+  periodType       String?
+  periodLabel      String?
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  serviceId        String
+  service          Service @relation(fields: [serviceId], references: [id])
+  serviceVersionId String
+  serviceVersion   ServiceVersion @relation(fields: [serviceVersionId], references: [id])
+  status           String  @default("DRAFT")
+  // DRAFT | SUBMITTED | IN_PROGRESS | CLIENT_INFO_REQUESTED | PROFESSIONAL_REVIEW |
+  // GOVERNMENT_SUBMISSION | ON_HOLD | REWORK | APPROVED_BY_AUTHORITY | COMPLETED | CANCELLED | REJECTED_BY_AUTHORITY
+  currentStageCode String?
+  formData         String  @default("{}") // validated dynamic-form answers
+  checklist        String  @default("[]") // computed document checklist snapshot
+  configSnapshot   String  @default("{}") // frozen configuration at submission
+  priority         String  @default("NORMAL")
+  submittedAt      DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  documents     UploadedDocument[]
+  tasks         ApplicationTask[]
+  quotations    Quotation[]
+  events        ApplicationEvent[]
+  statusHistory ApplicationStatusHistory[]
+  filings       FilingRecord[]
+  tickets       SupportTicket[]
+  reviewDecisions ReviewDecision[]
+  taxPayments   TaxPayment[]
+  complianceObligations ComplianceObligation[]
+
+  @@index([clientId])
+  @@index([businessId])
+  @@index([serviceId])
+  @@index([status])
+}
+
+model ApplicationEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          String // SUBMITTED | DOC_UPLOADED | DOC_REVIEWED | TASK_COMPLETED | STAGE_ADVANCED | INFO_REQUESTED | INFO_PROVIDED | REVIEW_DECIDED | FILING_RECORDED | NOTE | ...
+  actorId       String?
+  actorName     String?
+  payload       String? // JSON
+  createdAt     DateTime @default(now())
+
+  @@index([applicationId])
+}
+
+model ApplicationStatusHistory {
+  id            String   @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStatus    String?
+  toStatus      String
+  actorId       String?
+  actorName     String?
+  remarks       String?
+  createdAt     DateTime @default(now())
+
+  @@index([applicationId])
+}
+
+// =====================================================================
+// WORK MANAGEMENT
+// =====================================================================
+
+model ApplicationTask {
+  id               String  @id @default(cuid())
+  applicationId    String
+  application      Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  stageCode        String
+  templateCode     String
+  name             String
+  description      String?
+  responsibleRole  String
+  departmentId     String?
+  department       Department? @relation(fields: [departmentId], references: [id])
+  assignedToId     String?
+  assignee         User?   @relation("Assignee", fields: [assignedToId], references: [id])
+  status           String  @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+  unassignedReason String? // why the task sits in the unassigned queue
+  priority         String  @default("NORMAL")
+  slaDueAt         DateTime?
+  dependsOnCodes   String? // JSON array of template codes
+  evidenceNote     String?
+  evidenceRequired Boolean @default(false)
+  approvalRequired Boolean @default(false)
+  approvalStatus   String? // PENDING_REVIEW | APPROVED | CHANGES_REQUESTED
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  history TaskHistory[]
+
+  @@unique([applicationId, templateCode])
+  @@index([assignedToId, status])
+  @@index([applicationId])
+}
+
+model TaskHistory {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       ApplicationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  action     String // CREATED | ASSIGNED | REASSIGNED | STATUS_CHANGED | APPROVED | CHANGES_REQUESTED
+  fromStatus String?
+  toStatus   String?
+  actorId    String?
+  actorName  String?
+  remarks    String?
+  createdAt  DateTime @default(now())
+
+  @@index([taskId])
+}
+
+model ReviewDecision {
+  id                String   @id @default(cuid())
+  applicationId     String?
+  serviceVersionId  String?
+  application       Application? @relation(fields: [applicationId], references: [id])
+  serviceVersion    ServiceVersion? @relation(fields: [serviceVersionId], references: [id])
+  reviewerId        String
+  reviewerName      String
+  decision          String // APPROVE | REJECT | REQUEST_CHANGES
+  scope             String // TASK | CONFIG
+  stageCode         String?
+  notes             String?
+  createdAt         DateTime @default(now())
+}
+
+// =====================================================================
+// FINANCE (amounts stored as whole INR)
+// =====================================================================
+
+model Quotation {
+  id              String  @id @default(cuid())
+  applicationId   String
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  professionalFee Int
+  govtFee         Int
+  taxAmount       Int
+  discount        Int     @default(0)
+  total           Int
+  currency        String  @default("INR")
+  items           String  @default("[]") // JSON breakdown lines
+  pricingNote     String? // provenance note for fee components
+  demoMarked      Boolean @default(true)
+  status          String  @default("SENT") // SENT | ACCEPTED | EXPIRED | CANCELLED
+  acceptedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  payments Payment[]
+
+  @@index([applicationId])
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  quotationId    String
+  quotation      Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  amount         Int
+  currency       String   @default("INR")
+  method         String   @default("DEMO_GATEWAY")
+  gatewayRef     String?
+  idempotencyKey String   @unique
+  status         String   @default("PENDING") // PENDING | SUCCESS | FAILED
+  failureReason  String?
+  createdAt      DateTime @default(now())
+  confirmedAt    DateTime?
+
+  @@index([quotationId])
+}
+
+// =====================================================================
+// COMPLIANCE CALENDAR
+// =====================================================================
+
+model ComplianceObligation {
+  id            String  @id @default(cuid())
+  clientId      String
+  client        Client  @relation(fields: [clientId], references: [id])
+  businessId    String?
+  business      Business? @relation(fields: [businessId], references: [id])
+  serviceId     String?
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id])
+  code          String
+  title         String
+  frequency     String // MONTHLY | QUARTERLY | ANNUAL | EVENT
+  periodLabel   String?
+  dueDate       DateTime
+  internalTargetDate DateTime?
+  status        String  @default("PENDING") // PENDING | IN_PROGRESS | FILED | OVERDUE | WAIVED
+  note          String?
+  demoMarked    Boolean @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  filings FilingRecord[]
+
+  @@index([clientId])
+  @@index([dueDate])
+}
+
+// =====================================================================
+// STATUTORY DUE-DATE MASTER (CA-verified dates; PDF §4 / gap R-04)
+// =====================================================================
+
+model StatutoryDueDate {
+  id                String   @id @default(cuid())
+  serviceCode       String   // matches Service.code, e.g. GST_REG, ITR_FILING
+  obligationCode    String   // matches ComplianceRuleDef.code, e.g. GSTR1
+  frequency         String   // MONTHLY | QUARTERLY | ANNUAL | EVENT
+  periodLabel       String   // e.g. "November 2026" or "FY 2025-26" — unique per obligation
+  periodStart       DateTime
+  periodEnd         DateTime
+  dueDate           DateTime
+  sourceReferenceId String?  // provenance: which official source this date came from
+  source            SourceReference? @relation(fields: [sourceReferenceId], references: [id])
+  sourceNote        String?
+  effectiveFrom     DateTime @default(now())
+  effectiveTo       DateTime?
+  extensionNotified Boolean  @default(false)
+  extensionNote     String?
+  verifiedByUserId  String?
+  verifiedByName    String?
+  verifiedAt        DateTime?
+  demoMarked        Boolean  @default(true) // true until a qualified professional verifies the date
+  notes             String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([serviceCode, obligationCode, periodLabel])
+  @@index([serviceCode, obligationCode])
+  @@index([dueDate])
+}
+
+// =====================================================================
+// REMINDER POLICY + LOG (PDF §4/§5.C reminder loop; gap R-03)
+// =====================================================================
+
+model ReminderPolicy {
+  id             String  @id @default(cuid())
+  name           String
+  appliesTo      String  @default("COMPLIANCE") // COMPLIANCE | INFO_REQUEST | TASK
+  serviceId      String? // null = firm-wide default policy for the appliesTo kind
+  intervalsDays  String  @default("[15,7,2]") // JSON array: days before due date for early reminders
+  repeatEveryDays Int    @default(3) // repeat while still pending after the due reminder
+  escalateAfterDays Int  @default(3) // days AFTER due date before escalation fires
+  escalateToRole String  @default("MANAGER")
+  channel        String  @default("IN_APP") // in-app is the source of record; email/WhatsApp later
+  active         Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([appliesTo, active])
+}
+
+model ReminderLog {
+  id            String   @id @default(cuid())
+  obligationId  String?
+  applicationId String?
+  policyId      String?
+  recipientId   String
+  kind          String   // EARLY | REPEAT | DUE | OVERDUE | ESCALATION | INFO_REQUEST
+  daysBefore    Int?
+  channel       String   @default("IN_APP")
+  message       String
+  sentAt        DateTime @default(now())
+
+  @@index([obligationId, kind, daysBefore])
+  @@index([sentAt])
+}
+
+// =====================================================================
+// CLIENT TAX PAYMENT TRACKING (client's own liability; gap R-06)
+// Distinct from Quotation/Payment which track the FIRM's professional fee.
+// =====================================================================
+
+model TaxPayment {
+  id             String    @id @default(cuid())
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  liabilityType  String    @default("SELF_ASSESSMENT") // SELF_ASSESSMENT | ADVANCE_TAX | TDS | GST_CASH | OTHER
+  periodLabel    String?
+  amount         Int       // whole INR; 0 allowed when liability not yet quantified
+  status         String    @default("PENDING") // PENDING | PAID | WAIVED | NOT_APPLICABLE
+  dueDate        DateTime?
+  paidOn         DateTime?
+  challanRef     String?   // BSR+CIN / portal challan reference; required to mark PAID
+  evidenceNote   String?
+  recordedById   String?
+  recordedByName String?
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([applicationId])
+}
+
+// =====================================================================
+// REGULATORY UPDATE INTAKE (PDF §3.B pipeline, manual first; gaps R-05 + R-12)
+// =====================================================================
+
+model RegulatoryUpdate {
+  id                String    @id @default(cuid())
+  sourceReferenceId String
+  source            SourceReference @relation(fields: [sourceReferenceId], references: [id])
+  title             String
+  summary           String
+  publishedOn       String?
+  affectedServiceIds String   @default("[]") // JSON array of Service.id
+  status            String    @default("REPORTED") // REPORTED | UNDER_REVIEW | VERIFIED | APPLIED | DISMISSED
+  reportedById      String?
+  reportedByName    String?
+  verifiedById      String?
+  verifiedByName    String?
+  verifiedAt        DateTime?
+  verifiedNotes     String?
+  appliedAt         DateTime?
+  impactSnapshot    String?   // JSON: affected applications count + referenceNos computed at verification
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// =====================================================================
+// CLIENT CONSENT & AUTHORISATION RECORDS (PDF §7; gap R-11)
+// Mandatory before any portal retrieval / integration work (Stage 6).
+// =====================================================================
+
+model ConsentRecord {
+  id             String    @id @default(cuid())
+  clientId       String
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  applicationId  String?
+  scope          String    // e.g. DATA_RETRIEVAL_AIS | DATA_RETRIEVAL_26AS | INTEGRATION_GST_PORTAL | generic text
+  purpose        String
+  status         String    @default("GRANTED") // GRANTED | REVOKED
+  grantedAt      DateTime  @default(now())
+  revokedAt      DateTime?
+  expiryAt       DateTime?
+  evidenceNote   String?
+  grantedByRole  String    @default("CLIENT") // CLIENT | STAFF_ON_BEHALF
+  createdAt      DateTime  @default(now())
+
+  @@index([clientId, status])
+}
+
+model FilingRecord {
+  id                String  @id @default(cuid())
+  applicationId     String?
+  application       Application? @relation(fields: [applicationId], references: [id])
+  obligationId      String?
+  obligation        ComplianceObligation? @relation(fields: [obligationId], references: [id])
+  authority         String?
+  portal            String?
+  submissionMethod  String?
+  acknowledgementNo String?
+  officialStatus    String?
+  evidenceNote      String?
+  evidenceDocId     String?
+  recordedById      String?
+  recordedByName    String?
+  recordedAt        DateTime @default(now())
+}
+
+// =====================================================================
+// COMMUNICATION & SUPPORT
+// =====================================================================
+
+model Notification {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title    String
+  body     String
+  type     String?  // APPLICATION | TASK | PAYMENT | COMPLIANCE | SYSTEM
+  linkView String?  // SPA view hint, e.g. applications:appId
+  readAt   DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model SupportTicket {
+  id            String   @id @default(cuid())
+  ticketNo      String   @unique
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  applicationId String?
+  subject       String
+  category      String
+  priority      String   @default("NORMAL")
+  status        String   @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  application   Application? @relation(fields: [applicationId], references: [id])
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages SupportMessage[]
+
+  @@index([clientId])
+}
+
+model SupportMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  authorName String
+  authorRole String
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// =====================================================================
+// SYSTEM
+// =====================================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorName String?
+  actorRole String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String? // JSON
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId])
+}
