@@ -46,21 +46,31 @@ export async function POST(req: NextRequest) {
     const password = str(body.password)
     const role = str(body.role).toUpperCase()
     if (!name || !email || !password || !role) throw new HttpError(400, 'BAD_REQUEST', 'name, email, password and role are required.')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(422, 'INVALID_EMAIL', 'A valid email address is required.')
     if (!STAFF.includes(role as (typeof STAFF)[number])) throw new HttpError(422, 'BAD_ROLE', 'Role must be a staff role.')
     if (password.length < 8) throw new HttpError(422, 'WEAK_PASSWORD', 'Password must be at least 8 characters.')
     if (role === 'SUPER_ADMIN' && ctx.role !== 'SUPER_ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only a Super Admin can create Super Admin accounts.')
     const dup = await db.user.findUnique({ where: { email } })
     if (dup) throw new HttpError(409, 'EMAIL_TAKEN', 'A user with this email already exists.')
 
-    const user = await db.user.create({ data: { email, name, role, phone: str(body.phone) || null, passwordHash: hashPassword(password) } })
-    await db.employee.create({
-      data: {
-        userId: user.id,
-        departmentId: str(body.departmentId) || null,
-        designation: str(body.designation) || null,
-        specialization: JSON.stringify(body.specialization || []),
-        maxOpenTasks: typeof body.maxOpenTasks === 'number' && body.maxOpenTasks > 0 ? body.maxOpenTasks : 10,
-      },
+    const departmentId = str(body.departmentId) || null
+    if (departmentId) {
+      const dept = await db.department.findUnique({ where: { id: departmentId } })
+      if (!dept) throw new HttpError(404, 'NOT_FOUND', 'Department not found.')
+    }
+
+    const user = await db.$transaction(async (tx) => {
+      const u = await tx.user.create({ data: { email, name, role, phone: str(body.phone) || null, passwordHash: hashPassword(password) } })
+      await tx.employee.create({
+        data: {
+          userId: u.id,
+          departmentId,
+          designation: str(body.designation) || null,
+          specialization: JSON.stringify(body.specialization || []),
+          maxOpenTasks: typeof body.maxOpenTasks === 'number' && body.maxOpenTasks > 0 ? body.maxOpenTasks : 10,
+        },
+      })
+      return u
     })
     await audit({ actor: ctx, action: 'EMPLOYEE_CREATED', entity: 'User', entityId: user.id, details: { email, role } })
     return ok({ user: { id: user.id } }, 201)
@@ -82,7 +92,16 @@ export async function PATCH(req: NextRequest) {
     if (!emp) throw new HttpError(404, 'NOT_FOUND', 'Employee not found.')
 
     const empData: Record<string, unknown> = {}
-    if (typeof body.departmentId === 'string') empData.departmentId = body.departmentId || null
+    if (typeof body.departmentId === 'string') {
+      const deptId = str(body.departmentId)
+      if (deptId) {
+        const dept = await db.department.findUnique({ where: { id: deptId } })
+        if (!dept) throw new HttpError(404, 'NOT_FOUND', 'Department not found.')
+        empData.departmentId = deptId
+      } else {
+        empData.departmentId = null
+      }
+    }
     if (typeof body.designation === 'string') empData.designation = str(body.designation)
     if (typeof body.availability === 'string' && ['AVAILABLE', 'ON_LEAVE', 'UNAVAILABLE'].includes(body.availability)) empData.availability = body.availability
     if (typeof body.active === 'boolean') empData.active = body.active

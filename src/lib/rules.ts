@@ -219,7 +219,7 @@ export function computeChecklist(
 
 const PATTERNS: Record<string, RegExp> = {
   PAN: /^[A-Z]{5}[0-9]{4}[A-Z]$/,
-  GSTIN: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}[A-Z0-9]$/,
+  GSTIN: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{2}[A-Z0-9]$/,
   CIN: /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/,
   PIN: /^[1-9][0-9]{5}$/,
   PHONE: /^[6-9][0-9]{9}$/,

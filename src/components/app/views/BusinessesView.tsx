@@ -31,14 +31,21 @@ interface Business {
 }
 
 const CONSTITUTIONS = [
-  { value: 'PROPRIETORSHIP', label: 'Proprietorship' },
-  { value: 'PARTNERSHIP', label: 'Partnership' },
-  { value: 'LLP', label: 'Limited Liability Partnership' },
+  { value: 'PROPRIETORSHIP', label: 'Sole Proprietorship' },
+  { value: 'PARTNERSHIP', label: 'Partnership Firm' },
+  { value: 'LLP', label: 'Limited Liability Partnership (LLP)' },
+  { value: 'OPC', label: 'One Person Company (OPC)' },
   { value: 'PRIVATE_LIMITED', label: 'Private Limited Company' },
   { value: 'PUBLIC_LIMITED', label: 'Public Limited Company' },
-  { value: 'HUF', label: 'HUF' },
+  { value: 'HUF', label: 'Hindu Undivided Family (HUF)' },
   { value: 'TRUST', label: 'Trust' },
   { value: 'SOCIETY', label: 'Society' },
+  { value: 'SECTION_8', label: 'Section 8 Company' },
+  { value: 'COOPERATIVE_SOCIETY', label: 'Cooperative Society' },
+  { value: 'AOP', label: 'Association of Persons (AOP)' },
+  { value: 'BOI', label: 'Body of Individuals (BOI)' },
+  { value: 'GOVT_ENTITY', label: 'Government Entity / PSU' },
+  { value: 'FOREIGN_COMPANY', label: 'Foreign Company' },
   { value: 'OTHER', label: 'Other' },
 ]
 

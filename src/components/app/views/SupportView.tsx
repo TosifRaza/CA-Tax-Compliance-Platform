@@ -63,7 +63,7 @@ export default function SupportView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Support</h1>
-        <Button onClick={() => setOpen(true)}>New ticket</Button>
+        {!isStaff && <Button onClick={() => setOpen(true)}>New ticket</Button>}
       </div>
 
       {q.isLoading && <LoadingState />}

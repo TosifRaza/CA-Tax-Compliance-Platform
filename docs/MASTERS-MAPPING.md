@@ -1,82 +1,109 @@
-# Masters Mapping — original 28 masters → implemented architecture
+# CA Practice & Tax Compliance Management Platform
+## Clean Master Reference Guide — Roles & System Connections
 
-The legacy documentation defines 28 master types. Per the development mandate ("Do not create separate database tables for concepts that are better handled as mappings, enumerations or reusable configurations"), they map onto 22 consolidated Prisma models. Operational instances are deliberately stored in transaction tables, not masters.
+**Version:** 3.0 (Clean & Simple Edition) &middot; **Date:** November 2026
 
-## Service Configuration Masters (5)
+---
 
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 1. Tax Group Master | **ServiceCategory** | Renamed; category taxonomy for the service catalogue |
-| 2. Tax Master | **Service** | Renamed Service Master; code, client/internal names, authority, official URL, verification status, lifecycle status |
-| 3. Tax Type Master | folded into **Service** (`code`/category) + **ServiceVersion** payloads | No separate type table was justified; type-level behaviour is carried by the versioned configuration |
-| 4. Service Configuration Version | **ServiceVersion** | Versioned, immutability after publish, approval metadata, validation report |
-| 5. Service Applicability Mapping | **ServiceVersion.applicability** (JSON) + wizard eligibility filter | Constitutions/states/notes; validated before publish |
+## 1. Quick Summary: Which Role Connects to Which Master?
 
-## Organizational & Work Masters (5)
+Har user role ka system me alag kaam hai, aur har role specific masters ke sath interact karta hai:
 
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 6. Department Master | **Department** | Active flag, employee roster |
-| 7. Employee Role Master | `User.role` enum (RBAC) + **Employee** profile | Roles: SUPER_ADMIN/ADMIN/MANAGER/EMPLOYEE/CA_REVIEWER/CLIENT |
-| 8. Work Group Master | folded into **Department** + task `departmentCode` | A separate grouping table had no distinct behaviour |
-| 9. Work Master (reusable task definitions) | **ServiceVersion.taskTemplates** (JSON, versioned) | Reusable per service version; application instances in ApplicationTask |
-| 10. Work Assignment Rule Master | **lib/tasks.ts assignment engine** (code) | Least-workload rule with role/department/availability/maxOpenTasks checks; code-stored rule avoids unversioned config drift |
+```
+┌───────────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ USER ROLE                 │ CONNECTED MASTERS                                                      │
+├───────────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ 1. CLIENT                 │ • Client & Business Profile Master                                     │
+│                           │ • Service Master & Service Category (Browse & Select)                  │
+│                           │ • Dynamic Form Schema & Document Checklist (Intake Wizard)             │
+│                           │ • Service Pricing & Quotations (Fee Payment)                           │
+│                           │ • Client Tax Payment Master (Challan Upload)                           │
+│                           │ • Consent Records (DPDP Authorization)                                 │
+│                           │ • Reminder Policies (Receives deadline alerts)                         │
+├───────────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ 2. FIRM ADMIN / MANAGER   │ • User & RBAC Master (Manages Staff & Roles)                           │
+│                           │ • Department Master (Creates Firm Divisions)                           │
+│                           │ • Employee Profile & Availability (Monitors Capacity & Reassigns)      │
+│                           │ • Workflow & Stages Master (Defines Lifecycle Stages)                  │
+│                           │ • Service Pricing & Fee Masters (Sets Quotation Pricing)               │
+│                           │ • Reminder & Escalation Policies (Configures Alert Intervals)          │
+│                           │ • Audit Log (Inspects full firm activity)                              │
+├───────────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ 3. EMPLOYEE / ACCOUNTANT  │ • Department & Employee Master (Assigned tasks)                        │
+│                           │ • Task Templates & Workflow Stages (Executes daily work)               │
+│                           │ • Document Type & Missing-Document Loop (Verifies client documents)    │
+│                           │ • Client Tax Payment Master (Verifies BSR & Challan receipts)          │
+├───────────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ 4. CA / REVIEWER          │ • Service Master & Service Version Hub (Approves legal drafts)         │
+│                           │ • Official Source Registry (Verifies government gazette sources)       │
+│                           │ • Workflow Review Gates (Professional sign-off on casework)            │
+│                           │ • Filing Record (Enters official Government ARN / Acknowledgement)     │
+├───────────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ 5. KNOWLEDGE / RULE MGR   │ • Service Version Master (Drafts forms, checklists, rules)             │
+│                           │ • Statutory Due Date Master (Maintains tax return deadlines)           │
+│                           │ • Official Source Registry (Adds government portals & circulars)       │
+│                           │ • Regulatory Updates (Tracks changes in GST/ITR rules)                 │
+└───────────────────────────┴────────────────────────────────────────────────────────────────────────┘
+```
 
-## Requirements & Documents (6)
+---
 
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 11. Document Category Master | **DocumentType.category** | Simple attribute; no separate table justified |
-| 12. Document Master | **DocumentType** | Code/name/category/active |
-| 13. Requirement Field Master | **ServiceVersion.formSchema.fields** (JSON, versioned) | Field library is versioned with the service it belongs to; shared types/validators in `lib/rules.ts` |
-| 14. Requirement Option Master | field `options[]` inside the schema | Same rationale |
-| 15. Requirement Rule Master | **Rule trees** inside fields/documents (`visibilityRule`, `requiredRule`, `conditionRule`) | Declarative JSON, validated (unknown refs, cycles) before publish |
-| 16. Document Requirement Mapping | **ServiceVersion.documentRequirements** (JSON, versioned) | Maps documents to services with ALWAYS/CONDITIONAL/OPTIONAL + rules |
+## 2. Clean Masters Directory: Where Each Master Connects
 
-## Workflow & Status (5)
+Ye table hamare pure system ke **saare 21 Masters** ki simple list hai: unka simple matlab, unse juda role, aur system me unka exact use-case:
 
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 17. Workflow Master | **WorkflowDefinition** | Code/name/active |
-| 18. Workflow Stage Master | **WorkflowStage** | Sequence, responsible role, stage type, SLA, mandatory flag |
-| 19. Application Status Master | `Application.status` enum + `lib/status.ts` vocabulary | Fixed, validated state machine; client-friendly labels |
-| 20. Work Status Master | `ApplicationTask.status` enum | Application status and task status remain separate by design |
-| 21. Priority Master | `priority` enum on tasks/applications | Three-level enum; a table would be configuration theatre |
+| # | Master Name | Simple Purpose | Connected Role | Where Connected in the System |
+|---|---|---|---|---|
+| **1** | **User & RBAC Master** | System login, passwords aur permissions (7 roles) | All 5 Roles | Login screen, Header user pill, API permission guards (`requireRole`) |
+| **2** | **Department Master** | Firm ki operational teams (GST, Direct Tax, ROC, Support) | Admin & Manager | Team Tasks view (`TasksView`), Workload Reports (`ReportsView`) |
+| **3** | **Employee Profile Master** | Staff ki capacity (max 10 tasks) aur leave status (Available / On Leave) | Admin & Employee | Auto-assignment engine (`lib/tasks.ts`), Admin Reassign modal, Workload report |
+| **4** | **Client & Business Master** | Taxpayer profile, business constitution, PAN, GSTIN, annual turnover | Client & Admin | Client Portal, Business profile (`BusinessesView`), Eligibility check |
+| **5** | **Service Category Master** | Services ko group karna (Direct Tax, GST, Company Registration) | Client & Admin | Client Browse Services tabs (`ServicesView`), Admin service catalogue |
+| **6** | **Service Master** | Base service (code, client name, official government authority) | Admin & CA | Service selection wizard, Service setup (`AdminServicesView`), Applications |
+| **7** | **Service Version Master (Hub)** | Central legal rule hub (Forms, Checklist, Tasks, Pricing, Rules) | Knowledge Mgr & CA | Intake wizard, Frozen Case Snapshot (`configSnapshot`), CA approval gate |
+| **8** | **Official Source Registry** | Government portals & gazette list (incometax.gov.in, cbic.gov.in) | Knowledge Mgr & CA | Statutory due date citations, Regulatory updates, Gazette evidence links |
+| **9** | **Document Type Master** | Standard document vocabulary (PAN, Aadhaar, Bank Statement, Form 16) | Admin | Document checklists, Document verification modal in staff tasks |
+| **10** | **Document Checklist Mapping** | Kaunsa document zaroori hai (Always / Conditional / Optional) | Knowledge Mgr & Client | Client upload page, Staff missing-document loop (`TasksView`) |
+| **11** | **Dynamic Form Schema** | Intake questions & fields (PAN, GSTIN, Turnover, Yes/No questions) | Knowledge Mgr & Client | Dynamic client wizard (`DynamicForm.tsx`), Server-side answer validation |
+| **12** | **Declarative Rule Engine** | Field hide/show rules aur document condition trees | System (Shared) | React form wizard UI, Server submission validation (`lib/rules.ts`) |
+| **13** | **Workflow & Stages Master** | Case ke sequential steps (Collection &rarr; Verification &rarr; Review &rarr; Filing) | Admin & Manager | Application stage progress bar, Stage advancement gate in tasks |
+| **14** | **Task Templates Master** | Har stage me auto-generate hone wale tasks aur prerequisite dependencies | Knowledge Mgr & Employee | Staff "My Tasks" screen, Team Task queue, Prerequisite unlocking |
+| **15** | **Statutory Due Date Master** | Government return deadlines (GSTR-3B 20th, ITR 31st July) with Gazette cite | CA & Knowledge Mgr | Compliance Calendar (`ComplianceView`), Deadline reminder sweeps |
+| **16** | **Post-Service Compliance Rules** | Service khatam hone par recurring obligations generate karna (Monthly GST) | Knowledge Mgr & Client | Auto-populates recurring obligations on client business profile |
+| **17** | **Service Pricing & Fees** | Professional fee + Government fee (with reason) + 18% GST breakdown | Admin & Client | Client Quotation modal, Online payment checkout, Idempotent webhook |
+| **18** | **Client Tax Payment Master** | Client ka statutory tax challan tracking (Advance Tax, GST PMT-06 challan) | Employee & Client | Tax payment tracker; **unpaid challan blocks final filing** |
+| **19** | **Reminder Policy Master** | Automated alert schedule (Deadline se 15, 7, 2 din pehle ke alerts) | Knowledge Mgr & Admin | In-app notification center (Bell icon), Manager escalation alerts |
+| **20** | **Regulatory Update Pipeline** | New tax circulars intake, active cases par impact check, and version update | Knowledge Mgr & CA | Regulatory Updates view (`RegulatoryView`), CA drafting trigger |
+| **21** | **Consent Records (DPDP Act)** | Client digital permission before fetching AIS/26AS tax statements | Client & Staff | Client Consents screen (`ConsentsView`), Third-party API gate |
+| **22** | **Audit Log Master** | Kisne, kab, kya change kiya (Immutable history) | Admin | Audit Log viewer (`AuditView`), Historical tracking of all actions |
 
-## Finance (3)
+---
 
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 22. Service Pricing Master | **ServiceVersion.pricing** (JSON, effective-dated via version) | Professional fee, government fee + provenance note, tax %, discount, demo flag |
-| 23. Government Fee Master | **govtFee + govtFeeNote** inside version pricing | Provenance note is mandatory (validation gate) — prevents invented statutory fees |
-| 24. Payment Type Master | `Payment.method` + gateway adapter constants | Extended when a real gateway is wired |
+## 3. How Masters Connect to a Real Case (Simple 5-Step Lifecycle)
 
-## Compliance (3)
+Jab ek client portal me service request karta hai, toh masters is sequence me execute hote hain:
 
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 25. Compliance Master | **ServiceVersion.complianceRules** (JSON, versioned) + ComplianceObligation instances | Definitions versioned; client obligations are operational records |
-| 26. Compliance Frequency Master | `frequency` enum (MONTHLY/QUARTERLY/ANNUAL/EVENT) + `dueRule` note | Enum justified |
-| 27. Government Authority Master | `Service.authority` + **SourceReference.authority** + FilingRecord.authority | Central registry table would duplicate the Source Registry |
-
-## Communication & Support (3 → counted within the 28)
-
-| Legacy master | Implemented as | Notes |
-|---|---|---|
-| 28. Notification Template Master | Notification creation helpers (`lib/audit.ts`) with validated variables | Templates as code; delivery records in **Notification** |
-| — Communication Channel Master | constants (`type` on Notification) | In-app now; email/SMS adapters pending |
-| — Support Category Master | ticket `category` enum | Enum justified |
-
-## Added coherence entities (from §8.8)
-
-| Capability | Implemented as |
-|---|---|
-| Official Source Registry | **SourceReference** table (authority, title, URL, published/verified dates, verification status) |
-| Legal Rule Version | **ServiceVersion** (immutable, effectiveFrom, approval metadata) |
-| Configuration Approval | **ReviewDecision** (scope CONFIG/TASK) + approval fields on ServiceVersion |
-| Workflow Transition Rules | Stage-based advancement logic in `lib/tasks.ts` + unique task constraints + dependency arrays |
-| Task Dependency Mapping | `ApplicationTask.dependsOnCodes` (+ template-level `dependsOn`) |
-| Audit Log | **AuditLog** table + admin inspection UI |
-| Configuration Change History | ServiceVersion rows + changeNotes + ApplicationEvent/StatusHistory |
-
-**Net result:** 28 legacy masters → 12 concrete master/config tables + 3 enums + versioned JSON payloads + 1 rule engine, eliminating 1:1 table-per-concept redundancy while keeping every business capability.
+```
+[1. INTAKE]
+Client Business Profile + Dynamic Form Schema + Document Checklist
+   │
+   ▼
+[2. SNAPSHOT FREEZE]
+Application.configSnapshot copies the active Service Version rules permanently.
+(Future master edits will never disturb this active case!)
+   │
+   ▼
+[3. EXECUTION]
+Workflow Stages + Task Templates ──▶ Assigned to Employee via Least-Workload Engine.
+Employee verifies documents via Document Type Master. Missing docs trigger client alert.
+   │
+   ▼
+[4. PAYMENT & REVIEW]
+Quotation Fee (Firm payment) + Tax Payment Challan (Client tax liability verified).
+CA Reviewer signs off in Review Gates.
+   │
+   ▼
+[5. FILING & RETENTION]
+Filing Record stores official Government Acknowledgement Number (ARN).
+Post-Service Compliance Rules auto-generate next month's recurring return calendar!
+```

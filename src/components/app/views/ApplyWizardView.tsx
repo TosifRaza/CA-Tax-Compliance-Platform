@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, CheckCircle2, FileUp, Loader2, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -37,7 +37,7 @@ interface AppDetail {
     documents: { id: string; requirementCode: string | null; fileName: string; status: string; reviewNotes?: string | null; versionNo: number }[]
     quotation: null | { total: number; items: { label: string; amount: number; note: string | null }[]; pricingNote?: string | null; demoMarked: boolean }
     service: { clientName: string; authority: string | null; demoMarked: boolean }
-    business: { legalName: string } | null
+    business: { legalName: string; constitution?: string } | null
     workflowStages: { code: string; name: string }[]
   }
 }
@@ -66,7 +66,18 @@ export default function ApplyWizardView({ serviceId }: { serviceId: string }) {
   })
 
   const draftApp = app.data?.application
-  const currentAnswers = answers ?? draftApp?.formData ?? {}
+  const currentAnswers = useMemo<Answers>(() => {
+    const base = answers ?? draftApp?.formData ?? {}
+    const constitution = draftApp?.business?.constitution
+    if (constitution && (!base.businessConstitution || !base.constitution)) {
+      return {
+        ...base,
+        businessConstitution: base.businessConstitution || constitution,
+        constitution: base.constitution || constitution,
+      }
+    }
+    return base
+  }, [answers, draftApp?.formData, draftApp?.business?.constitution])
   const snapshotSchema = draftApp?.formSchema ?? null
 
   // Debounced draft autosave.
@@ -158,6 +169,9 @@ export default function ApplyWizardView({ serviceId }: { serviceId: string }) {
   const businesses = evaluated.filter((e) => e.verdict.eligible).map((e) => e.business)
   const ineligible = evaluated.filter((e) => !e.verdict.eligible)
 
+  // Auto-select business if exactly 1 is eligible
+  const selectedBusinessId = businessId || (businesses.length === 1 ? businesses[0].id : '')
+
   const total = pricing.professionalFee + pricing.govtFee + Math.round((pricing.professionalFee * (pricing.taxPercent ?? 0)) / 100)
 
   if (submittedRef) {
@@ -200,14 +214,31 @@ export default function ApplyWizardView({ serviceId }: { serviceId: string }) {
               {pricing.govtFeeNote && <p className="text-xs text-muted-foreground pt-1">Government fee note: {pricing.govtFeeNote}</p>}
             </div>
             {applicantType !== 'INDIVIDUAL' && (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="business">Apply for which business?</Label>
-              <Select value={businessId} onValueChange={(v) => setBusinessId(v)} disabled={busy}>
-                <SelectTrigger id="business" className="w-full"><SelectValue placeholder="Select a business profile" /></SelectTrigger>
-                <SelectContent>
-                  {businesses.map((b) => <SelectItem key={b.id} value={b.id}>{b.legalName} ({b.constitution.replaceAll('_', ' ').toLowerCase()})</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {businesses.length === 0 ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm space-y-2">
+                  <p className="text-amber-900 dark:text-amber-200">
+                    No eligible business profile found. You must create a business profile before applying for this service.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => navigate('businesses')}>
+                    Go to Business Profile &rarr;
+                  </Button>
+                </div>
+              ) : (
+                <Select value={selectedBusinessId} onValueChange={(v) => setBusinessId(v)} disabled={busy}>
+                  <SelectTrigger id="business" className="w-full">
+                    <SelectValue placeholder="Select a business profile" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businesses.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.legalName} ({b.constitution.replaceAll('_', ' ').toLowerCase()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {ineligible.length > 0 && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm space-y-1">
                   {ineligible.map((e) => (
@@ -215,7 +246,6 @@ export default function ApplyWizardView({ serviceId }: { serviceId: string }) {
                   ))}
                 </div>
               )}
-              {businesses.length === 0 && <p className="text-sm text-muted-foreground">No eligible business profile found. Add one under “Your Business Details” first.</p>}
             </div>
             )}
 
@@ -240,8 +270,8 @@ export default function ApplyWizardView({ serviceId }: { serviceId: string }) {
 
           {busy && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Creating draft…</p>}
           <Button
-            disabled={busy || (applicantType !== 'INDIVIDUAL' && !businessId) || (periodMode !== 'NONE' && !periodLabel)}
-            onClick={() => void createDraft(applicantType === 'INDIVIDUAL' ? null : businessId, periodLabel)}
+            disabled={busy || (applicantType !== 'INDIVIDUAL' && !selectedBusinessId) || (periodMode !== 'NONE' && !periodLabel)}
+            onClick={() => void createDraft(applicantType === 'INDIVIDUAL' ? null : selectedBusinessId, periodLabel)}
           >
             Start application <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>

@@ -142,7 +142,10 @@ export function prefillAnswers(schema: FormSchema, business: { legalName: string
     registeredAddress: business.registeredAddress,
     operatingAddress: business.operatingAddress,
   } : {}
-  const answers: Answers = {}
+  const answers: Answers = business ? {
+    constitution: business.constitution,
+    businessConstitution: business.constitution,
+  } : {}
   for (const s of schema.sections || []) {
     for (const f of s.fields || []) {
       if (f.prefillFromBusiness && prefillMap[f.prefillFromBusiness]) {
@@ -347,6 +350,9 @@ export async function loadApplicationFor(ctx: AuthContext, applicationId: string
   })
   if (!app) throw new HttpError(404, 'NOT_FOUND', 'Application not found.')
 
+  if (ctx.role === 'KNOWLEDGE_MANAGER') {
+    throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to casework applications.')
+  }
   if (ctx.role === 'CLIENT') {
     const client = await db.client.findUnique({ where: { userId: ctx.userId } })
     if (!client || app.clientId !== client.id) throw new HttpError(403, 'FORBIDDEN', 'You cannot access this application.')

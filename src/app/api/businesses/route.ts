@@ -5,7 +5,24 @@ import { HttpError } from '@/lib/types'
 import { audit } from '@/lib/audit'
 import { jsonError, ok, parseJson, str } from '@/lib/api-utils'
 
-const CONSTITUTIONS = ['PROPRIETORSHIP', 'PARTNERSHIP', 'LLP', 'PRIVATE_LIMITED', 'PUBLIC_LIMITED', 'HUF', 'TRUST', 'SOCIETY', 'OTHER']
+const CONSTITUTIONS = [
+  'PROPRIETORSHIP',
+  'PARTNERSHIP',
+  'LLP',
+  'OPC',
+  'PRIVATE_LIMITED',
+  'PUBLIC_LIMITED',
+  'HUF',
+  'TRUST',
+  'SOCIETY',
+  'SECTION_8',
+  'COOPERATIVE_SOCIETY',
+  'AOP',
+  'BOI',
+  'GOVT_ENTITY',
+  'FOREIGN_COMPANY',
+  'OTHER',
+]
 
 // R-13: client-declared annual turnover (whole INR). Optional; a declared
 // value must be a non-negative integer so applicability thresholds evaluate

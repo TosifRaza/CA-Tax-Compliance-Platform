@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { isStaff } from '@/lib/types'
+import { HttpError, isStaff } from '@/lib/types'
 import { createDraft } from '@/lib/applications'
 import { jsonError, ok, parseJson, parsePagination, str } from '@/lib/api-utils'
 
@@ -9,6 +9,9 @@ import { jsonError, ok, parseJson, parsePagination, str } from '@/lib/api-utils'
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to casework applications.')
+    }
     const { take, skip, page } = parsePagination(req)
     const status = req.nextUrl.searchParams.get('status') || undefined
 
@@ -66,6 +69,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to casework applications.')
+    }
     const body = await parseJson<{ serviceId?: string; businessId?: string; periodLabel?: string; periodType?: string }>(req)
     const draft = await createDraft(ctx, {
       serviceId: str(body.serviceId),

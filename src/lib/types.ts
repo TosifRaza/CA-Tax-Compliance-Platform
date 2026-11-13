@@ -54,7 +54,7 @@ export interface FormField {
   required: boolean
   helpText?: string
   placeholder?: string
-  options?: { value: string; label: string }[]
+  options?: { value: string; label: string; constitutions?: string[] }[]
   validation?: FieldValidation
   visibilityRule?: Rule
   requiredRule?: Rule

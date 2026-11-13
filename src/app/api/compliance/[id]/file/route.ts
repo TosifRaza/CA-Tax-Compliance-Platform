@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!ack) throw new HttpError(422, 'ACK_REQUIRED', 'An official acknowledgement/reference number is required to mark an obligation as filed.')
     if (!evidenceNote) throw new HttpError(422, 'EVIDENCE_REQUIRED', 'Evidence of filing (portal confirmation note) is required.')
 
-    const obligation = await db.complianceObligation.findUnique({ where: { id } })
+    const obligation = await db.complianceObligation.findUnique({ where: { id }, include: { client: { select: { userId: true } } } })
     if (!obligation) throw new HttpError(404, 'NOT_FOUND', 'Obligation not found.')
     if (obligation.status === 'FILED') throw new HttpError(422, 'ALREADY_FILED', 'This obligation is already recorded as filed.')
 
@@ -37,7 +37,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
       await tx.complianceObligation.update({ where: { id }, data: { status: 'FILED' } })
     })
-    await notify({ userId: obligation.clientId, title: 'Compliance filing recorded', body: `${obligation.title} recorded as filed (Ref: ${ack}).`, type: 'COMPLIANCE', linkView: 'compliance' })
+    if (obligation.client?.userId) {
+      await notify({ userId: obligation.client.userId, title: 'Compliance filing recorded', body: `${obligation.title} recorded as filed (Ref: ${ack}).`, type: 'COMPLIANCE', linkView: 'compliance' })
+    }
     await audit({ actor: ctx, action: 'COMPLIANCE_FILED', entity: 'ComplianceObligation', entityId: id, details: { ack } })
     return ok({ status: 'FILED' })
   } catch (e) {

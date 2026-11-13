@@ -32,7 +32,7 @@ async function computeImpact(affectedServiceIds: string[]): Promise<{ applicatio
 // GET /api/regulatory-updates — list updates (staff).
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth(req)
+    await requireRole(req, ['CA_REVIEWER', 'ADMIN', 'SUPER_ADMIN', 'KNOWLEDGE_MANAGER', 'MANAGER', 'EMPLOYEE'])
     const updates = await db.regulatoryUpdate.findMany({
       include: { source: { select: { id: true, authority: true, title: true, url: true, verificationStatus: true } } },
       orderBy: { createdAt: 'desc' },

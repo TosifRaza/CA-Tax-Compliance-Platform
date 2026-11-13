@@ -10,7 +10,7 @@ const APPLIES_TO = ['COMPLIANCE', 'INFO_REQUEST', 'TASK']
 // GET /api/admin/reminder-policies — list reminder policy masters (R-03).
 export async function GET(req: NextRequest) {
   try {
-    await requireRole(req, ['SUPER_ADMIN', 'ADMIN', 'MANAGER'])
+    await requireRole(req, ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'KNOWLEDGE_MANAGER'])
     const policies = await db.reminderPolicy.findMany({ orderBy: [{ appliesTo: 'asc' }, { createdAt: 'asc' }] })
     return ok({
       policies: policies.map((p) => ({ ...p, intervals: JSON.parse(p.intervalsDays) as number[] })),

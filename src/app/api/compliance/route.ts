@@ -8,6 +8,9 @@ import { jsonError, ok, str } from '@/lib/api-utils'
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to client compliance obligations.')
+    }
     const where: Record<string, unknown> = {}
     if (ctx.role === 'CLIENT') {
       const client = await db.client.findUnique({ where: { userId: ctx.userId } })
@@ -41,6 +44,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to client compliance obligations.')
+    }
     if (ctx.role === 'CLIENT') {
       throw new HttpError(403, 'FORBIDDEN', 'Staff only.')
     }

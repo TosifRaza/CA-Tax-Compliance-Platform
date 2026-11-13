@@ -60,6 +60,12 @@ export async function POST(req: NextRequest) {
     if (!body.periodStart || !body.periodEnd || !body.dueDate) {
       throw new HttpError(400, 'BAD_REQUEST', 'periodStart, periodEnd and dueDate are required.')
     }
+    const periodStart = parseDate(body.periodStart, 'periodStart')
+    const periodEnd = parseDate(body.periodEnd, 'periodEnd')
+    const dueDate = parseDate(body.dueDate, 'dueDate')
+    if (periodStart > periodEnd) {
+      throw new HttpError(422, 'INVALID_PERIOD', 'periodStart must be before or equal to periodEnd.')
+    }
     const svc = await db.service.findUnique({ where: { code: serviceCode } })
     if (!svc) throw new HttpError(404, 'NOT_FOUND', `No service with code ${serviceCode}.`)
     if (body.sourceReferenceId) {
@@ -77,9 +83,9 @@ export async function POST(req: NextRequest) {
         obligationCode,
         frequency: str(body.frequency) || 'EVENT',
         periodLabel,
-        periodStart: parseDate(body.periodStart, 'periodStart'),
-        periodEnd: parseDate(body.periodEnd, 'periodEnd'),
-        dueDate: parseDate(body.dueDate, 'dueDate'),
+        periodStart,
+        periodEnd,
+        dueDate,
         sourceReferenceId: body.sourceReferenceId || null,
         sourceNote: str(body.sourceNote) || null,
         effectiveFrom: body.effectiveFrom ? parseDate(body.effectiveFrom, 'effectiveFrom') : new Date(),
@@ -124,6 +130,12 @@ export async function PATCH(req: NextRequest) {
     if (body.extensionNote !== undefined) data.extensionNote = str(body.extensionNote) || null
     if (body.notes !== undefined) data.notes = str(body.notes) || null
     if (typeof body.active === 'boolean') data.active = body.active
+
+    const effectiveStart = (data.periodStart as Date) || existing.periodStart
+    const effectiveEnd = (data.periodEnd as Date) || existing.periodEnd
+    if (effectiveStart > effectiveEnd) {
+      throw new HttpError(422, 'INVALID_PERIOD', 'periodStart must be before or equal to periodEnd.')
+    }
 
     if (body.verify) {
       if (!data.dueDate && !existing.sourceReferenceId && body.sourceReferenceId === undefined) {

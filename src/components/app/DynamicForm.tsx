@@ -47,7 +47,7 @@ export default function DynamicForm({ schema, answers, errors, onAnswers, onErro
           <div className="grid gap-4 p-4 md:grid-cols-2">
             {s.fields.map((f) => (
               <div key={f.code} className={spanClass(f.type)}>
-                <FieldInput field={f} value={answers[f.code]} error={errors[f.code]} disabled={disabled} onChange={(v) => setValue(f.code, v)} />
+                <FieldInput field={f} value={answers[f.code]} answers={answers} error={errors[f.code]} disabled={disabled} onChange={(v) => setValue(f.code, v)} />
               </div>
             ))}
           </div>
@@ -68,9 +68,10 @@ function spanClass(t: FieldType): string {
   return ''
 }
 
-function FieldInput({ field, value, error, disabled, onChange }: {
+function FieldInput({ field, value, answers, error, disabled, onChange }: {
   field: FormField
   value: string | number | boolean | string[] | null | undefined
+  answers?: Answers
   error?: string
   disabled?: boolean
   onChange: (v: string | number | boolean | string[] | null) => void
@@ -105,7 +106,13 @@ function FieldInput({ field, value, error, disabled, onChange }: {
         </div>
       )
     case 'RADIO': {
-      const opts = field.options || []
+      const allOpts = field.options || []
+      const currentConstitution = (answers?.businessConstitution || answers?.constitution) as string | undefined
+      const opts = allOpts.filter((o) => {
+        if (!o.constitutions || o.constitutions.length === 0) return true
+        if (!currentConstitution) return true
+        return o.constitutions.includes(currentConstitution)
+      })
       return (
         <div className="space-y-1.5">
           <Label>{field.label}{requiredMark(field)}</Label>
@@ -123,7 +130,13 @@ function FieldInput({ field, value, error, disabled, onChange }: {
       )
     }
     case 'SELECT': {
-      const opts = field.options || []
+      const allOpts = field.options || []
+      const currentConstitution = (answers?.businessConstitution || answers?.constitution) as string | undefined
+      const opts = allOpts.filter((o) => {
+        if (!o.constitutions || o.constitutions.length === 0) return true
+        if (!currentConstitution) return true
+        return o.constitutions.includes(currentConstitution)
+      })
       return (
         <div className="space-y-1.5">
           <Label htmlFor={field.code}>{field.label}{requiredMark(field)}</Label>

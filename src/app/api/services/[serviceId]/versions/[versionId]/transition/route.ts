@@ -34,6 +34,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ser
       case 'APPROVED': {
         const ctx = await requireRole(req, ['CA_REVIEWER'])
         const report = await assertPublishable(versionId) // throws when errors present
+        if (from !== 'PROFESSIONAL_REVIEW') {
+          throw new HttpError(422, 'NOT_IN_REVIEW', 'A version must be submitted for PROFESSIONAL_REVIEW before it can be approved.')
+        }
         await db.serviceVersion.update({
           where: { id: versionId },
           data: { status: 'APPROVED', approvedByUserId: ctx.userId, approvedByName: ctx.name, approvedAt: new Date() },
@@ -82,6 +85,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ser
 
       case 'DRAFT': {
         const ctx = await requireRole(req, ['SUPER_ADMIN', 'ADMIN'])
+        if (from === 'PUBLISHED' || from === 'RETIRED') {
+          throw new HttpError(422, 'IMMUTABLE', 'Published or retired versions cannot be moved back to draft. Create a new version instead.')
+        }
         await db.serviceVersion.update({ where: { id: versionId }, data: { status: 'DRAFT' } })
         await audit({ actor: ctx, action: 'CONFIG_BACK_TO_DRAFT', entity: 'ServiceVersion', entityId: versionId })
         return ok({ status: 'DRAFT' })

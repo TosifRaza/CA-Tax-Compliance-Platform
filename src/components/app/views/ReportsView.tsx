@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { History, Users } from 'lucide-react'
+import { History, Users, AlertTriangle, Inbox, ListTodo } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -44,11 +44,11 @@ export default function ReportsView() {
         <p className="text-sm text-muted-foreground">Open work per employee and department, plus the recorded assignment history. Use Team Tasks to reassign work.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Open tasks (assigned)" value={totalOpen} />
-        <StatCard label="Overdue across team" value={totalOverdue} hint="Past their SLA target" />
-        <StatCard label="Unassigned queue" value={data.unassignedTotal} hint="Waiting for authorized assignment" />
-        <StatCard label="At/over capacity" value={overloaded} hint="Employees at 100%+ of their open-task cap" />
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Open Assigned Tasks" value={totalOpen} icon={ListTodo} variant="blue" hint="Tasks active across all staff" />
+        <StatCard label="Overdue Across Team" value={totalOverdue} icon={AlertTriangle} variant="red" hint="Past internal SLA target" />
+        <StatCard label="Unassigned Queue" value={data.unassignedTotal} icon={Inbox} variant="amber" hint="Waiting for authorized assignment" />
+        <StatCard label="At / Over Capacity" value={overloaded} icon={Users} variant="purple" hint="Employees at 100%+ open task cap" />
       </div>
 
       <Card>

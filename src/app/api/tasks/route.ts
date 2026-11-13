@@ -24,8 +24,10 @@ export async function GET(req: NextRequest) {
         throw new HttpError(403, 'FORBIDDEN', 'Only managers and admins can view the unassigned queue.')
       }
     } else {
-      // 'all' — staff overview
-      if (ctx.role === 'CLIENT') throw new HttpError(403, 'FORBIDDEN', 'Clients cannot list tasks.')
+      // 'all' — manager/admin overview
+      if (['EMPLOYEE', 'CA_REVIEWER', 'KNOWLEDGE_MANAGER', 'CLIENT'].includes(ctx.role)) {
+        throw new HttpError(403, 'FORBIDDEN', 'Only managers and administrators can view all team tasks.')
+      }
     }
 
     const [tasks, total] = await Promise.all([

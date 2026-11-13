@@ -60,8 +60,8 @@ export default function AdminMastersView() {
         </p>
       </div>
       <Tabs defaultValue={tabs[0]?.id}>
-        <TabsList className="flex-wrap">
-          {tabs.map((t) => <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>)}
+        <TabsList className="flex-wrap bg-muted/60 p-1 rounded-xl border border-border/60 h-auto">
+          {tabs.map((t) => <TabsTrigger key={t.id} value={t.id} className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:shadow-2xs">{t.label}</TabsTrigger>)}
         </TabsList>
         {tabs.map((t) => <TabsContent key={t.id} value={t.id} className="mt-4">{t.content}</TabsContent>)}
       </Tabs>
@@ -750,7 +750,7 @@ function AddPolicyDialog({ open, onOpenChange, busy, error, onSubmit }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={busy || !name.trim() || parsedIntervals.length === 0} onClick={() => onSubmit({ name, appliesTo, intervals: parsedIntervals, repeatEveryDays: Number(repeatEveryDays) || 3, escalateAfterDays: Number(escalateAfterDays) || 3, escalateToRole })}>Create</Button>
+          <Button disabled={busy || !name.trim() || parsedIntervals.length === 0} onClick={() => onSubmit({ name, appliesTo, intervals: parsedIntervals, repeatEveryDays: Math.max(1, Number(repeatEveryDays) || 3), escalateAfterDays: Number.isFinite(Number(escalateAfterDays)) ? Math.max(0, Number(escalateAfterDays)) : 3, escalateToRole })}>Create</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

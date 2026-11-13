@@ -195,9 +195,10 @@ export async function advanceWorkflow(
 ): Promise<string> {
   const app = await db.application.findUnique({
     where: { id: applicationId },
-    include: { tasks: true },
+    include: { tasks: true, client: { select: { userId: true } } },
   })
   if (!app) throw new HttpError(404, 'NOT_FOUND', 'Application not found.')
+  const clientUserId = app.client?.userId
 
   const snapshot = JSON.parse(app.configSnapshot) as ConfigSnapshot
   const stages = [...(snapshot.workflow?.stages || [])].sort((a, b) => a.sequence - b.sequence)
@@ -229,7 +230,9 @@ export async function advanceWorkflow(
       await db.applicationEvent.create({
         data: { applicationId, type: 'STAGE_ADVANCED', actorName: actor?.name ?? 'System', payload: JSON.stringify({ to: 'COMPLETED' }) },
       })
-      await notify({ userId: app.clientId, title: 'Application completed', body: `Application ${app.referenceNo} has been completed.`, type: 'APPLICATION', linkView: `applications:${app.id}` })
+      if (clientUserId) {
+        await notify({ userId: clientUserId, title: 'Application completed', body: `Application ${app.referenceNo} has been completed.`, type: 'APPLICATION', linkView: `applications:${app.id}` })
+      }
       // Generate future compliance obligations from the frozen config (demo-marked until verified).
       await generateComplianceObligations(applicationId, snapshot)
       return 'COMPLETED'
@@ -249,9 +252,9 @@ export async function advanceWorkflow(
     await db.applicationEvent.create({
       data: { applicationId, type: 'STAGE_ADVANCED', actorName: actor?.name ?? 'System', payload: JSON.stringify({ from: previousStage, to: nextIncomplete.code }) },
     })
-    if (app.clientId) {
+    if (clientUserId) {
       await notify({
-        userId: app.clientId,
+        userId: clientUserId,
         title: 'Application progress update',
         body: `Application ${app.referenceNo} moved to "${nextIncomplete.name}".`,
         type: 'APPLICATION',
@@ -273,7 +276,7 @@ function mapStageToStatus(stage: StageSnapshot): ApplicationStatus {
 }
 
 export async function generateComplianceObligations(applicationId: string, snapshot: ConfigSnapshot): Promise<void> {
-  const app = await db.application.findUnique({ where: { id: applicationId }, include: { service: { select: { code: true } } } })
+  const app = await db.application.findUnique({ where: { id: applicationId }, include: { service: { select: { code: true } }, client: { select: { userId: true } } } })
   if (!app) return
   const rules = (snapshot.complianceRules || []) as {
     code: string; title: string; frequency: string; dueRule: string; offsetDays: number; applicabilityRule?: unknown; note?: string; demoMarked?: boolean
@@ -333,13 +336,15 @@ export async function generateComplianceObligations(applicationId: string, snaps
       },
     })
   }
-  await notify({
-    userId: app.clientId,
-    title: 'Compliance calendar updated',
-    body: 'Upcoming statutory obligations have been added for this business. Verify details with your assigned professional.',
-    type: 'COMPLIANCE',
-    linkView: 'compliance',
-  })
+  if (app.client?.userId) {
+    await notify({
+      userId: app.client.userId,
+      title: 'Compliance calendar updated',
+      body: 'Upcoming statutory obligations have been added for this business. Verify details with your assigned professional.',
+      type: 'COMPLIANCE',
+      linkView: 'compliance',
+    })
+  }
 }
 
 // Gate: government submission tasks may only complete with all required docs approved.

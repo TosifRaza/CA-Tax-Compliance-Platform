@@ -11,12 +11,12 @@ const EDITABLE_STATUSES = ['DRAFT', 'VALIDATION', 'TEST', 'PROFESSIONAL_REVIEW']
 export async function GET(req: NextRequest, { params }: { params: Promise<{ serviceId: string; versionId: string }> }) {
   try {
     await requireRole(req, ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'CA_REVIEWER', 'KNOWLEDGE_MANAGER'])
-    const { versionId } = await params
+    const { serviceId, versionId } = await params
     const version = await db.serviceVersion.findUnique({
       where: { id: versionId },
       include: { workflow: { include: { stages: true } }, service: true },
     })
-    if (!version) throw new HttpError(404, 'NOT_FOUND', 'Version not found.')
+    if (!version || version.serviceId !== serviceId) throw new HttpError(404, 'NOT_FOUND', 'Version not found.')
     return ok({
       version: {
         id: version.id,
@@ -60,14 +60,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ serv
 const RULE_CONTENT_KEYS = ['formSchema', 'documentRequirements', 'taskTemplates', 'applicability', 'complianceRules', 'sourceReferences']
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ serviceId: string; versionId: string }> }) {
   try {
-    const { versionId } = await params
+    const { serviceId, versionId } = await params
     const probe = await requireAuth(req)
     const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(probe.role)
     if (!isAdmin && probe.role !== 'KNOWLEDGE_MANAGER') {
       throw new HttpError(403, 'FORBIDDEN', 'You do not have permission to perform this action.')
     }
     const version = await db.serviceVersion.findUnique({ where: { id: versionId } })
-    if (!version) throw new HttpError(404, 'NOT_FOUND', 'Version not found.')
+    if (!version || version.serviceId !== serviceId) throw new HttpError(404, 'NOT_FOUND', 'Version not found.')
     if (!EDITABLE_STATUSES.includes(version.status)) {
       throw new HttpError(422, 'VERSION_IMMUTABLE', 'A published/retired version is immutable. Create a new version to make changes.')
     }

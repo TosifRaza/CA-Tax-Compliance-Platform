@@ -63,7 +63,8 @@ export function checkLoginRate(ip: string): void {
     return
   }
   rec.count += 1
-  if (rec.count > 30) {
+  const limit = process.env.NODE_ENV === 'production' ? 30 : 200
+  if (rec.count > limit) {
     throw new HttpError(429, 'RATE_LIMITED', 'Too many login attempts. Please try again in a few minutes.')
   }
 }

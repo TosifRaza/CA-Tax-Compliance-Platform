@@ -16,6 +16,9 @@ import { jsonError, ok, parseJson, str } from '@/lib/api-utils'
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to client consent records.')
+    }
     let clientId: string | null = null
     if (ctx.role === 'CLIENT') {
       const client = await db.client.findUnique({ where: { userId: ctx.userId } })
@@ -39,6 +42,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to client consent records.')
+    }
     const body = await parseJson<{ scope?: string; purpose?: string; expiryAt?: string; evidenceNote?: string; clientId?: string }>(req)
     const scope = str(body.scope)
     const purpose = str(body.purpose)
@@ -79,6 +85,9 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const ctx = await requireAuth(req)
+    if (ctx.role === 'KNOWLEDGE_MANAGER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Knowledge managers do not have access to client consent records.')
+    }
     const body = await parseJson<{ id?: string }>(req)
     const id = str(body.id)
     if (!id) throw new HttpError(400, 'BAD_REQUEST', 'id is required.')
